@@ -231,9 +231,7 @@ bool FastPlannerManager::trajOpt()
 
 // !SECTION
 
-void FastPlannerManager::planYaw(const Eigen::Vector3d& end_pt_, 
-                                 const double& t_cur,
-                                 const Eigen::Vector3d& odom_pos_, 
+void FastPlannerManager::planYaw(const double& t_cur,
                                  double& desire_psi_) {
 
   Eigen::Vector2d v2;

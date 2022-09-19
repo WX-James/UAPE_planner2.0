@@ -53,7 +53,7 @@ public:
 
   bool trajOpt();
 
-  void planYaw(const Eigen::Vector3d& end_pt_, const double& t_cur, const Eigen::Vector3d& odom_pos_, double& desire_psi_);
+  void planYaw(const double& t_cur, double& desire_psi_);
 
   void initPlanModules(ros::NodeHandle& nh);
 

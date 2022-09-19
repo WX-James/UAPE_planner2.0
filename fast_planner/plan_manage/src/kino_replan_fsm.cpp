@@ -187,7 +187,7 @@ void KinoReplanFSM::execFSMCallback(const ros::TimerEvent& e) {
       Eigen::Vector3d vel = info->traj.getVel(t_cur);
       Eigen::Vector3d acc = info->traj.getAcc(t_cur);
       double desire_psi;
-      planner_manager_->planYaw(end_pt_, t_cur, odom_pos_, desire_psi);
+      planner_manager_->planYaw(t_cur, desire_psi);
 
       cmd_.position.x = pos[0];
       cmd_.position.y = pos[1];
