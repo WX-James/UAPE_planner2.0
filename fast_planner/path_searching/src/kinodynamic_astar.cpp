@@ -233,8 +233,9 @@ int KinodynamicAstar::search(Eigen::Vector3d start_pt, Eigen::Vector3d start_v, 
         // f = g + h
         double time_to_goal, tmp_g_score, tmp_h_score, tmp_f_score;
         tmp_g_score = (um.squaredNorm() + w_time_) * tau + cur_node->g_score;
-        tmp_h_score = estimateOcclusion(pro_state, end_state);
-        tmp_f_score = tmp_g_score + lambda_heu_ * estimateHeuristic(pro_state, end_state, time_to_goal) + 5.0 * tmp_h_score;
+        tmp_h_score =   lambda_heu_ * estimateHeuristic(pro_state, end_state, time_to_goal)
+                              + 5.0 * estimateOcclusion(pro_state, end_state);
+        tmp_f_score = tmp_g_score + tmp_h_score;
 
         // Compare nodes expanded from the same parent
         bool prune = false;
@@ -407,7 +408,7 @@ double KinodynamicAstar::estimateOcclusion(Eigen::VectorXd x1, Eigen::VectorXd x
   {
     if (edt_environment_->sdf_map_->getInflateOccupancy(start + i*dx) == 1 )
     {
-      cost = 50;
+      cost = 30;
       break;
     }
   }

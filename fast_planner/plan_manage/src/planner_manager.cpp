@@ -161,10 +161,10 @@ bool FastPlannerManager::kinodynamicReplan(Eigen::Vector3d start_pt, Eigen::Vect
   // updateTrajInfo();
   // parameterize the path to bspline
 
-  double                  ts = pp_.ctrl_pt_dist / pp_.max_vel_;
-  vector<Eigen::Vector3d> point_set, start_end_derivatives;
-  // double te = 0.1;
-  kino_path_finder_->getSamples(ts, point_set, start_end_derivatives);
+  // double                  ts = pp_.ctrl_pt_dist / pp_.max_vel_;
+  // vector<Eigen::Vector3d> point_set, start_end_derivatives;
+  // // double te = 0.1;
+  // kino_path_finder_->getSamples(ts, point_set, start_end_derivatives);
 
   std::vector<Eigen::Vector3d> pc;
   sdf_map_->getSurf(pc);

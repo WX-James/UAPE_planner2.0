@@ -35,7 +35,7 @@
 #include <std_msgs/Empty.h>
 #include <vector>
 #include <quadrotor_msgs/PositionCommand.h>
-
+#include <quadrotor_msgs/PolynomialTrajectory.h>
 #include <plan_env/edt_environment.h>
 #include <plan_env/obj_predictor.h>
 #include <plan_env/sdf_map.h>
@@ -99,7 +99,7 @@ private:
 
   /* ROS utils */
   ros::NodeHandle node_;
-  ros::Timer exec_timer_, safety_timer_, vis_timer_, test_something_timer_;
+  ros::Timer exec_timer_, safety_timer_, vis_timer_, test_something_timer_, cmd_timer_;
   ros::Subscriber waypoint_sub_, odom_sub_;
   ros::Publisher replan_pub_, new_pub_, bspline_pub_, traj_pub_, cmd_pub_;
 
@@ -107,11 +107,13 @@ private:
   bool callKinodynamicReplan();        // front-end and back-end method
   bool callTopologicalTraj(int step);  // topo path guided gradient-based
                                        // optimization; 1: new, 2: replan
+  void pubTrajcectory();
   void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
   void printFSMExecState();
 
   /* ROS functions */
   void execFSMCallback(const ros::TimerEvent& e);
+  void pubCMDCallback(const ros::TimerEvent& e);
   void checkCollisionCallback(const ros::TimerEvent& e);
   void waypointCallback(const nav_msgs::PathConstPtr& msg);
   void odometryCallback(const nav_msgs::OdometryConstPtr& msg);

@@ -1,316 +1,506 @@
-/**
-* This file is part of Fast-Planner.
-*
-* Copyright 2019 Boyu Zhou, Aerial Robotics Group, Hong Kong University of Science and Technology, <uav.ust.hk>
-* Developed by Boyu Zhou <bzhouai at connect dot ust dot hk>, <uv dot boyuzhou at gmail dot com>
-* for more information see <https://github.com/HKUST-Aerial-Robotics/Fast-Planner>.
-* If you use this code, please cite the respective publications as
-* listed on the above website.
-*
-* Fast-Planner is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Lesser General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* Fast-Planner is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License
-* along with Fast-Planner. If not, see <http://www.gnu.org/licenses/>.
-*/
-
-
-
-#include "nav_msgs/Odometry.h"
-#include "quadrotor_msgs/PositionCommand.h"
-#include "std_msgs/Empty.h"
-#include "visualization_msgs/Marker.h"
+#include <eigen3/Eigen/Dense>
+//#include <pcl/point_cloud.h>
+//#include <pcl/point_types.h>
+//#include <pcl_conversions/pcl_conversions.h>
 #include <ros/ros.h>
+#include <ros/console.h>
+#include <tf/tf.h>
+#include <tf/transform_datatypes.h>
+#include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
+#include <quadrotor_msgs/PolynomialTrajectory.h>
+#include <quadrotor_msgs/PositionCommand.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Point.h>
+#include <visualization_msgs/MarkerArray.h>
+#include <visualization_msgs/Marker.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <math.h>
+const int  _DIM_x = 0;
+const int  _DIM_y = 1;
+const int  _DIM_z = 2;
 
-ros::Publisher cmd_vis_pub, pos_cmd_pub, traj_pub;
+using namespace std;
 
-nav_msgs::Odometry odom;
+int _poly_order_min, _poly_order_max;
 
-quadrotor_msgs::PositionCommand cmd;
-// double pos_gain[3] = {5.7, 5.7, 6.2};
-// double vel_gain[3] = {3.4, 3.4, 4.0};
-double pos_gain[3] = { 5.7, 5.7, 6.2 };
-double vel_gain[3] = { 3.4, 3.4, 4.0 };
+class TrajectoryServer
+{
+private:
 
-using fast_planner::NonUniformBspline;
+    // Subscribers
+    ros::Subscriber _odom_sub;
+    ros::Subscriber _traj_sub;
+    ros::Subscriber _way_pts_sub;
+    
 
-bool receive_traj_ = false;
-vector<NonUniformBspline> traj_;
-double traj_duration_;
-ros::Time start_time_;
-int traj_id_;
+    // publishers
+    ros::Publisher _cmd_pub;
+    ros::Publisher _vis_cmd_pub;
+    ros::Publisher _vis_vel_pub;
+    ros::Publisher _vis_acc_pub;
+    ros::Publisher _vis_traj_pub;
+    ros::Publisher _vis_traj_points;
+    
+    // configuration for trajectory
+    int _n_segment = 0;
+    int _traj_id = 0;
+    uint32_t _traj_flag = 0;
+    Eigen::VectorXd _time;
+    Eigen::MatrixXd _coef[3];
+    Eigen::Vector3d _goal;
+    vector<int> _order;
+    
+    double _vis_traj_width = 0.2;
+    double mag_coeff;
+    ros::Time _final_time = ros::TIME_MIN;
+    ros::Time _start_time = ros::TIME_MAX;
+    double _start_yaw = 0.0, _final_yaw = 0.0;
 
-// yaw control
-double last_yaw_;
-double time_forward_;
+    geometry_msgs::Point hover_position;
 
-vector<Eigen::Vector3d> traj_cmd_, traj_real_;
+    // state of the server
+    //enum ServerState{INIT, TRAJ, HOVER} state = INIT;
+    enum ServerState{INIT = 0, TRAJ, HOVER} state = INIT;;
+    nav_msgs::Odometry _odom;
+    quadrotor_msgs::PositionCommand _cmd;
+    geometry_msgs::PoseStamped _vis_cmd;
 
-void displayTrajWithColor(vector<Eigen::Vector3d> path, double resolution, Eigen::Vector4d color,
-                          int id) {
-  visualization_msgs::Marker mk;
-  mk.header.frame_id = "world";
-  mk.header.stamp = ros::Time::now();
-  mk.type = visualization_msgs::Marker::SPHERE_LIST;
-  mk.action = visualization_msgs::Marker::DELETE;
-  mk.id = id;
+    visualization_msgs::Marker _vis_vel, _vis_acc;
+    visualization_msgs::Marker _vis_traj;
 
-  traj_pub.publish(mk);
+    sensor_msgs::PointCloud2 traj_pts;
 
-  mk.action = visualization_msgs::Marker::ADD;
-  mk.pose.orientation.x = 0.0;
-  mk.pose.orientation.y = 0.0;
-  mk.pose.orientation.z = 0.0;
-  mk.pose.orientation.w = 1.0;
+    // pcl::PointCloud<pcl::PointXYZ> traj_pts_pcd;
+public:
+    
+    vector<Eigen::VectorXd> CList;   // Position coefficients vector, used to record all the pre-compute 'n choose k' combinatorial for the bernstein coefficients .
+    vector<Eigen::VectorXd> CvList; // Velocity coefficients vector.
+    vector<Eigen::VectorXd> CaList; // Acceleration coefficients vector.
 
-  mk.color.r = color(0);
-  mk.color.g = color(1);
-  mk.color.b = color(2);
-  mk.color.a = color(3);
+    TrajectoryServer(ros::NodeHandle & handle)
+    {   
+        _odom_sub = 
+            handle.subscribe("odometry", 50, &TrajectoryServer::rcvOdometryCallback, this,
+                                                ros::TransportHints().tcpNoDelay());
 
-  mk.scale.x = resolution;
-  mk.scale.y = resolution;
-  mk.scale.z = resolution;
+        _traj_sub =
+            handle.subscribe("trajectory", 2, &TrajectoryServer::rcvTrajectoryCallabck, this);
+        
+        _way_pts_sub     = handle.subscribe( "/waypoint_generator/waypoints", 1, &TrajectoryServer::rcvWaypointsCallBack, this);
+        _cmd_pub = 
+            handle.advertise<quadrotor_msgs::PositionCommand>("position_command", 50);
 
-  geometry_msgs::Point pt;
-  for (int i = 0; i < int(path.size()); i++) {
-    pt.x = path[i](0);
-    pt.y = path[i](1);
-    pt.z = path[i](2);
-    mk.points.push_back(pt);
-  }
-  traj_pub.publish(mk);
-  ros::Duration(0.001).sleep();
+        _vis_cmd_pub = 
+            handle.advertise<geometry_msgs::PoseStamped>("desired_position", 50);
+
+        _vis_vel_pub = 
+            handle.advertise<visualization_msgs::Marker>("desired_velocity", 50);
+        
+        _vis_acc_pub = 
+            handle.advertise<visualization_msgs::Marker>("desired_acceleration", 50);
+
+        _vis_traj_pub = 
+            handle.advertise<visualization_msgs::Marker>("trajectory_vis", 1);
+
+        // _vis_traj_points = 
+        //     handle.advertise<sensor_msgs::PointCloud2>("trajectory_vis_points", 1);
+        
+        double pos_gain[3] = {5.7, 5.7, 6.2};
+        double vel_gain[3] = {3.4, 3.4, 4.0};
+        setGains(pos_gain, vel_gain);
+
+        _vis_traj.header.stamp       = ros::Time::now();
+        _vis_traj.header.frame_id    = "map";
+
+        _vis_traj.ns = "trajectory/trajectory";
+        _vis_traj.id = 0;
+        _vis_traj.type = visualization_msgs::Marker::SPHERE_LIST;
+        _vis_traj.action = visualization_msgs::Marker::ADD;
+        _vis_traj.scale.x = _vis_traj_width;
+        _vis_traj.scale.y = _vis_traj_width;
+        _vis_traj.scale.z = _vis_traj_width;
+        _vis_traj.pose.orientation.x = 0.0;
+        _vis_traj.pose.orientation.y = 0.0;
+        _vis_traj.pose.orientation.z = 0.0;
+        _vis_traj.pose.orientation.w = 1.0;
+        _vis_traj.color.r = 0.0;
+        _vis_traj.color.g = 0.0;
+        _vis_traj.color.b = 1.0;
+        _vis_traj.color.a = 0.3;
+        _vis_traj.points.clear();
+    }
+
+    void setGains(double pos_gain[3], double vel_gain[3])
+    {
+        _cmd.kx[_DIM_x] = pos_gain[_DIM_x];
+        _cmd.kx[_DIM_y] = pos_gain[_DIM_y];
+        _cmd.kx[_DIM_z] = pos_gain[_DIM_z];
+
+        _cmd.kv[_DIM_x] = vel_gain[_DIM_x];
+        _cmd.kv[_DIM_y] = vel_gain[_DIM_y];
+        _cmd.kv[_DIM_z] = vel_gain[_DIM_z];
+    }
+
+    bool cmd_flag = false;
+
+
+void rcvWaypointsCallBack(const nav_msgs::Path & wp)
+{  int size = (int)wp.poses.size();
+   _goal<< wp.poses[size-1].pose.position.x, wp.poses[size-1].pose.position.y, wp.poses[size-1].pose.position.z;
+   cout<<"yaw goal received!"<<endl;
 }
+    void rcvOdometryCallback(const nav_msgs::Odometry & odom)
+    {
+        //ROS_WARN("state = %d",state);
+        if (odom.child_frame_id == "X" || odom.child_frame_id == "O") return ;
+        // #1. store the odometry
+        _odom = odom;
+        _vis_cmd.header = _odom.header;
+        _vis_cmd.header.frame_id = "/map";
 
-void drawCmd(const Eigen::Vector3d& pos, const Eigen::Vector3d& vec, const int& id,
-             const Eigen::Vector4d& color) {
-  visualization_msgs::Marker mk_state;
-  mk_state.header.frame_id = "world";
-  mk_state.header.stamp = ros::Time::now();
-  mk_state.id = id;
-  mk_state.type = visualization_msgs::Marker::ARROW;
-  mk_state.action = visualization_msgs::Marker::ADD;
+        if(state == INIT )
+        {
+            //ROS_WARN("[TRAJ SERVER] Pub initial pos command");
+            _cmd.position   = _odom.pose.pose.position;
+            
+            _cmd.header.stamp = _odom.header.stamp;
+            _cmd.header.frame_id = "/map";
+            _cmd.trajectory_flag = _traj_flag;
 
-  mk_state.pose.orientation.w = 1.0;
-  mk_state.scale.x = 0.1;
-  mk_state.scale.y = 0.2;
-  mk_state.scale.z = 0.3;
+            _cmd.velocity.x = 0.0;
+            _cmd.velocity.y = 0.0;
+            _cmd.velocity.z = 0.0;
+            
+            _cmd.acceleration.x = 0.0;
+            _cmd.acceleration.y = 0.0;
+            _cmd.acceleration.z = 0.0;
+            // _cmd_pub.publish(_cmd);
 
-  geometry_msgs::Point pt;
-  pt.x = pos(0);
-  pt.y = pos(1);
-  pt.z = pos(2);
-  mk_state.points.push_back(pt);
+            _cmd.jerk.x = 0.0;
+            _cmd.jerk.y = 0.0;
+            _cmd.jerk.z = 0.0;
 
-  pt.x = pos(0) + vec(0);
-  pt.y = pos(1) + vec(1);
-  pt.z = pos(2) + vec(2);
-  mk_state.points.push_back(pt);
+            _vis_cmd.pose.position.x = _cmd.position.x;
+            _vis_cmd.pose.position.y = _cmd.position.y;
+            _vis_cmd.pose.position.z = _cmd.position.z;
+            // _vis_cmd_pub.publish(_vis_cmd);
 
-  mk_state.color.r = color(0);
-  mk_state.color.g = color(1);
-  mk_state.color.b = color(2);
-  mk_state.color.a = color(3);
+            return;
+        }
 
-  cmd_vis_pub.publish(mk_state);
-}
 
-void bsplineCallback(plan_manage::BsplineConstPtr msg) {
-  // parse pos traj
+        // change the order between #2 and #3. zxzxzxzx
+        
+        // #2. try to calculate the new state
+        if (state == TRAJ && ( (ros::Time::now()/*odom.header.stamp*/ - _start_time).toSec() / mag_coeff > (_final_time - _start_time).toSec() ) )
+        {
+            state = HOVER;
+            hover_position = _odom.pose.pose.position;
+            _traj_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_COMPLETED;
+        }
 
-  Eigen::MatrixXd pos_pts(msg->pos_pts.size(), 3);
+        // #3. try to publish command
+        pubPositionCommand();
+    }
 
-  Eigen::VectorXd knots(msg->knots.size());
-  for (int i = 0; i < msg->knots.size(); ++i) {
-    knots(i) = msg->knots[i];
-  }
+    void rcvTrajectoryCallabck(const quadrotor_msgs::PolynomialTrajectory & traj)
+    {
+        //ROS_WARN("[SERVER] Recevied The Trajectory with %.3lf.", _start_time.toSec());
+        //ROS_WARN("[SERVER] Now the odom time is : ");
+        // #1. try to execuse the action
+        
+        if (traj.action == quadrotor_msgs::PolynomialTrajectory::ACTION_ADD)
+        {   
+            ROS_WARN("[traj_server] Loading the trajectory.");
+            if ((int)traj.trajectory_id < 1) 
+            {
+                ROS_ERROR("[traj_server] The trajectory_id must start from 1"); //. zxzxzxzx
+                return;
+            }
+            if ((int)traj.trajectory_id > 1 && (int)traj.trajectory_id < _traj_id) return ;
 
-  for (int i = 0; i < msg->pos_pts.size(); ++i) {
-    pos_pts(i, 0) = msg->pos_pts[i].x;
-    pos_pts(i, 1) = msg->pos_pts[i].y;
-    pos_pts(i, 2) = msg->pos_pts[i].z;
-  }
+            state = TRAJ;
+            _traj_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_READY;
+            _traj_id = traj.trajectory_id;
+            _n_segment = traj.num_segment;
+            _final_time = _start_time = ros::Time::now();//_odom.header.stamp;
+            _time.resize(_n_segment);
 
-  NonUniformBspline pos_traj(pos_pts, msg->order, 0.1);
-  pos_traj.setKnot(knots);
+            _order.clear();
+            for (int idx = 0; idx < _n_segment; ++idx)
+            {
+                _final_time += ros::Duration(traj.time[idx]);
+                _time(idx) = traj.time[idx];
+                _order.push_back(traj.order[idx]);
+            }
 
-  // parse yaw traj
+            _start_yaw = traj.start_yaw;
+            _final_yaw = traj.final_yaw;
+            mag_coeff  = traj.mag_coeff;
 
-  Eigen::MatrixXd yaw_pts(msg->yaw_pts.size(), 1);
-  for (int i = 0; i < msg->yaw_pts.size(); ++i) {
-    yaw_pts(i, 0) = msg->yaw_pts[i];
-  }
+            int max_order = *max_element( begin( _order ), end( _order ) ); 
+            
+            _coef[_DIM_x] = Eigen::MatrixXd::Zero(max_order + 1, _n_segment);
+            _coef[_DIM_y] = Eigen::MatrixXd::Zero(max_order + 1, _n_segment);
+            _coef[_DIM_z] = Eigen::MatrixXd::Zero(max_order + 1, _n_segment);
+            
+            //ROS_WARN("stack the coefficients");
+            int shift = 0;
+            for (int idx = 0; idx < _n_segment; ++idx)
+            {     
+                int order = traj.order[idx];
 
-  NonUniformBspline yaw_traj(yaw_pts, msg->order, msg->yaw_dt);
+                for (int j = 0; j < (order + 1); ++j)
+                {
+                    _coef[_DIM_x](j, idx) = traj.coef_x[shift + j];
+                    _coef[_DIM_y](j, idx) = traj.coef_y[shift + j];
+                    _coef[_DIM_z](j, idx) = traj.coef_z[shift + j];
+                }
 
-  start_time_ = msg->start_time;
-  traj_id_ = msg->traj_id;
+                shift += (order + 1);
+            }
+        }
+        else if (traj.action == quadrotor_msgs::PolynomialTrajectory::ACTION_ABORT) 
+        {
+            ROS_WARN("[SERVER] Aborting the trajectory.");
+            state = HOVER;
+            hover_position = _odom.pose.pose.position;
+            _traj_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_COMPLETED;
+        }
+        else if (traj.action == quadrotor_msgs::PolynomialTrajectory::ACTION_WARN_IMPOSSIBLE)
+        {
+            state = HOVER;
+            hover_position = _odom.pose.pose.position;
+            _traj_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_IMPOSSIBLE;
+        }
+    }
 
-  traj_.clear();
-  traj_.push_back(pos_traj);
-  traj_.push_back(traj_[0].getDerivative());
-  traj_.push_back(traj_[1].getDerivative());
-  traj_.push_back(yaw_traj);
-  traj_.push_back(yaw_traj.getDerivative());
+    void pubPositionCommand()
+    {
+        // #1. check if it is right state
+        if (state == INIT) return;
+        if (state == HOVER) return;
+        
+        _cmd.yaw_dot =  0.0;
+     
+        // #2. locate the trajectory segment
+        if (state == TRAJ)
+        {
+            _cmd.header.stamp = ros::Time::now();//_odom.header.stamp;
 
-  traj_duration_ = traj_[0].getTimeSum();
+            _cmd.header.frame_id = "/map";
+            _cmd.trajectory_flag = _traj_flag;
+            _cmd.trajectory_id = _traj_id;
 
-  receive_traj_ = true;
-}
+            double t = max(0.0, (_cmd.header.stamp - _start_time).toSec()+0.08);// / mag_coeff;
 
-void replanCallback(std_msgs::Empty msg) {
-  /* reset duration */
-  const double time_out = 0.01;
-  ros::Time time_now = ros::Time::now();
-  double t_stop = (time_now - start_time_).toSec() + time_out;
-  traj_duration_ = min(t_stop, traj_duration_);
-}
+            //cout<<"t: "<<t<<endl; 
+            _cmd.yaw_dot = 0.0;
+            Eigen::Vector2d v2;
+            Eigen::Vector2d v1;
+            v2<< _goal[0] - _odom.pose.pose.position.x, _goal[1] - _odom.pose.pose.position.y;
+            v1<<1.0,0.0;
+            double desire_psi=acos(v1.dot(v2) /(v1.norm()*v2.norm())); 
+            if (v2(1)<0)
+              {desire_psi = -desire_psi;}
+            _cmd.yaw = desire_psi;
+        //    _cmd.yaw = _start_yaw + (_final_yaw - _start_yaw) * t 
+            //    / ((_final_time - _start_time).toSec() + 1e-9);
 
-void newCallback(std_msgs::Empty msg) {
-  traj_cmd_.clear();
-  traj_real_.clear();
-}
+            // #3. calculate the desired states
+            //ROS_WARN("[SERVER] the time : %.3lf\n, n = %d, m = %d", t, _n_order, _n_segment);
+            for (int idx = 0; idx < _n_segment; ++idx)
+            {
+                if (t > _time[idx] && idx + 1 < _n_segment)
+                {
+                    t -= _time[idx];
+                }
+                else
+                {   
+                    t /= _time[idx];
 
-void odomCallbck(const nav_msgs::Odometry& msg) {
-  if (msg.child_frame_id == "X" || msg.child_frame_id == "O") return;
+                    _cmd.position.x = 0.0;
+                    _cmd.position.y = 0.0;
+                    _cmd.position.z = 0.0;
+                    _cmd.velocity.x = 0.0;
+                    _cmd.velocity.y = 0.0;
+                    _cmd.velocity.z = 0.0;
+                    _cmd.acceleration.x = 0.0;
+                    _cmd.acceleration.y = 0.0;
+                    _cmd.acceleration.z = 0.0;
+                    _cmd.jerk.x = 0.0;
+                    _cmd.jerk.y = 0.0;
+                    _cmd.jerk.z = 0.0;
 
-  odom = msg;
+                    int cur_order = _order[idx];
+                    int cur_poly_num = cur_order + 1;
 
-  traj_real_.push_back(
-      Eigen::Vector3d(odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z));
+                    for(int i = 0; i < cur_poly_num; i ++)
+                    {
+                        _cmd.position.x += _coef[_DIM_x].col(idx)(i) * pow(t, i);
+                        _cmd.position.y += _coef[_DIM_y].col(idx)(i) * pow(t, i);
+                        _cmd.position.z += _coef[_DIM_z].col(idx)(i) * pow(t, i);
 
-  if (traj_real_.size() > 10000) traj_real_.erase(traj_real_.begin(), traj_real_.begin() + 1000);
-}
+                        if (i < (cur_poly_num - 1))
+                        {
+                            _cmd.velocity.x += (i + 1) * _coef[_DIM_x].col(idx)(i + 1) * pow(t, i) / _time[idx];
 
-void visCallback(const ros::TimerEvent& e) {
-  // displayTrajWithColor(traj_real_, 0.03, Eigen::Vector4d(0.925, 0.054, 0.964,
-  // 1),
-  //                      1);
+                            _cmd.velocity.y += (i + 1) * _coef[_DIM_y].col(idx)(i + 1) * pow(t, i) / _time[idx];
 
-  displayTrajWithColor(traj_cmd_, 0.05, Eigen::Vector4d(0, 1, 0, 1), 2);
-}
+                            _cmd.velocity.z += (i + 1) * _coef[_DIM_z].col(idx)(i + 1) * pow(t, i) / _time[idx];
+                        }
 
-void cmdCallback(const ros::TimerEvent& e) {
-  /* no publishing before receive traj_ */
-  if (!receive_traj_) return;
+                        if (i < (cur_poly_num - 2))
+                        {
+                            _cmd.acceleration.x += (i + 2) * (i + 1) * _coef[_DIM_x].col(idx)(i + 2) * pow(t, i) / _time[idx] / _time[idx];
 
-  ros::Time time_now = ros::Time::now();
-  double t_cur = (time_now - start_time_).toSec();
+                            _cmd.acceleration.y += (i + 2) * (i + 1) * _coef[_DIM_y].col(idx)(i + 2) * pow(t, i) / _time[idx] / _time[idx];
 
-  Eigen::Vector3d pos, vel, acc, pos_f;
-  double yaw, yawdot;
+                            _cmd.acceleration.z += (i + 2) * (i + 1) * _coef[_DIM_z].col(idx)(i + 2) * pow(t, i) / _time[idx] / _time[idx];
+                        }
+                        
+                        if (i < (cur_poly_num - 3))
+                        {
+                            _cmd.jerk.x += (i + 3) *  (i + 2) * (i + 1) * _coef[_DIM_x].col(idx)(i + 3) * pow(t, i) / _time[idx] / _time[idx] / _time[idx];
+                            
+                            _cmd.jerk.y += (i + 3) *  (i + 2) * (i + 1) * _coef[_DIM_y].col(idx)(i + 3) * pow(t, i) / _time[idx] / _time[idx] / _time[idx];
+                            
+                            _cmd.jerk.z += (i + 3) *  (i + 2) * (i + 1) * _coef[_DIM_z].col(idx)(i + 3) * pow(t, i) / _time[idx] / _time[idx] / _time[idx];
+                        }
 
-  if (t_cur < traj_duration_ && t_cur >= 0.0) {
-    pos = traj_[0].evaluateDeBoorT(t_cur);
-    vel = traj_[1].evaluateDeBoorT(t_cur);
-    acc = traj_[2].evaluateDeBoorT(t_cur);
-    yaw = traj_[3].evaluateDeBoorT(t_cur)[0];
-    yawdot = traj_[4].evaluateDeBoorT(t_cur)[0];
+                    }
 
-    double tf = min(traj_duration_, t_cur + 2.0);
-    pos_f = traj_[0].evaluateDeBoorT(tf);
+                    // _cmd.yaw = atan2(_cmd.velocity.y, _cmd.velocity.x);
 
-  } else if (t_cur >= traj_duration_) {
-    /* hover when finish traj_ */
-    pos = traj_[0].evaluateDeBoorT(traj_duration_);
-    vel.setZero();
-    acc.setZero();
-    yaw = traj_[3].evaluateDeBoorT(traj_duration_)[0];
-    yawdot = traj_[4].evaluateDeBoorT(traj_duration_)[0];
+                    // tf::Quaternion quat(_odom.pose.pose.orientation.x, _odom.pose.pose.orientation.y, _odom.pose.pose.orientation.z, _odom.pose.pose.orientation.w);
+                    // tf::Matrix3x3 rotM(quat);
+                    // double roll, pitch, yaw;
+                    // rotM.getRPY(roll, pitch, yaw);
+                    // const double pi = 3.14159265358979;
+                    // double deltaYaw = yaw - _cmd.yaw;
+                    // if (deltaYaw < -pi)
+                    //     deltaYaw += 2 * pi;
+                    // if (deltaYaw >= pi)
+                    //     deltaYaw -= 2 * pi;
 
-    pos_f = pos;
+                    // _cmd.yaw_dot = -0.75 * deltaYaw;
+                    // if(fabs(_cmd.yaw_dot) > pi/2)
+                    // {
+                    //     _cmd.yaw_dot /= fabs(_cmd.yaw_dot);
+                    //     _cmd.yaw_dot *= pi/2;
+                    // }
 
-  } else {
-    cout << "[Traj server]: invalid time." << endl;
-  }
 
-  cmd.header.stamp = time_now;
-  cmd.header.frame_id = "world";
-  cmd.trajectory_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_READY;
-  cmd.trajectory_id = traj_id_;
+                    //_cmd.yaw =  0.0;
+                   // _cmd.yaw_dot =  0.0;
 
-  cmd.position.x = pos(0);
-  cmd.position.y = pos(1);
-  cmd.position.z = pos(2);
+                    //ROS_WARN("%.8f %.8f %.8f %.8f",_cmd.velocity.x,_cmd.velocity.y,_cmd.yaw,t);
 
-  cmd.velocity.x = vel(0);
-  cmd.velocity.y = vel(1);
-  cmd.velocity.z = vel(2);
+                    break;
+                } 
+            }
+        }
+        // #4. just publish
+        _cmd_pub.publish(_cmd);
 
-  cmd.acceleration.x = acc(0);
-  cmd.acceleration.y = acc(1);
-  cmd.acceleration.z = acc(2);
+        _vis_cmd.header = _cmd.header;
+        _vis_cmd.pose.position.x = _cmd.position.x;
+        _vis_cmd.pose.position.y = _cmd.position.y;
+        _vis_cmd.pose.position.z = _cmd.position.z;
+        
+        tf::Quaternion q_ = tf::createQuaternionFromYaw(_cmd.yaw);
+        geometry_msgs::Quaternion odom_quat;
+        tf::quaternionTFToMsg(q_, odom_quat);
+        _vis_cmd.pose.orientation = odom_quat;
+        _vis_cmd_pub.publish(_vis_cmd);
+        
+        _vis_vel.ns = "vel";
+        _vis_vel.id = 0;
+        _vis_vel.header.frame_id = "/map";
+        _vis_vel.type = visualization_msgs::Marker::ARROW;
+        _vis_vel.action = visualization_msgs::Marker::ADD;
+        _vis_vel.color.a = 1.0;
+        _vis_vel.color.r = 0.0;
+        _vis_vel.color.g = 1.0;
+        _vis_vel.color.b = 0.0;
 
-  cmd.yaw = yaw;
-  cmd.yaw_dot = yawdot;
+        _vis_vel.header.stamp = _odom.header.stamp;
+        _vis_vel.points.clear();
 
-  auto pos_err = pos_f - pos;
-  // if (pos_err.norm() > 1e-3) {
-  //   cmd.yaw = atan2(pos_err(1), pos_err(0));
-  // } else {
-  //   cmd.yaw = last_yaw_;
-  // }
-  // cmd.yaw_dot = 1.0;
+        geometry_msgs::Point pt;
+        pt.x = _cmd.position.x;
+        pt.y = _cmd.position.y;
+        pt.z = _cmd.position.z;
+        
+        _vis_traj.points.push_back(pt);
+        _vis_traj_pub.publish(_vis_traj);
 
-  last_yaw_ = cmd.yaw;
+        // pcl::PointXYZ point(pt.x, pt.y, pt.z);
+        // traj_pts_pcd.points.push_back(point);
+        // traj_pts_pcd.width = traj_pts_pcd.points.size();
+        // traj_pts_pcd.height = 1;
+        // traj_pts_pcd.is_dense = true;
+         
+        // pcl::toROSMsg(traj_pts_pcd, traj_pts);
+        // traj_pts.header.frame_id = "map";
+        // _vis_traj_points.publish(traj_pts);
 
-  pos_cmd_pub.publish(cmd);
+        _vis_vel.points.push_back(pt);
+        
+        pt.x = _cmd.position.x + _cmd.velocity.x;
+        pt.y = _cmd.position.y + _cmd.velocity.y;
+        pt.z = _cmd.position.z + _cmd.velocity.z;
+        
+        _vis_vel.points.push_back(pt);
 
-  // draw cmd
+        _vis_vel.scale.x = 0.2;
+        _vis_vel.scale.y = 0.4;
+        _vis_vel.scale.z = 0.4;
 
-  // drawCmd(pos, vel, 0, Eigen::Vector4d(0, 1, 0, 1));
-  // drawCmd(pos, acc, 1, Eigen::Vector4d(0, 0, 1, 1));
+        _vis_vel_pub.publish(_vis_vel);
 
-  Eigen::Vector3d dir(cos(yaw), sin(yaw), 0.0);
-  drawCmd(pos, 2 * dir, 2, Eigen::Vector4d(1, 1, 0, 0.7));
-  // drawCmd(pos, pos_err, 3, Eigen::Vector4d(1, 1, 0, 0.7));
+        _vis_acc.ns = "acc";
+        _vis_acc.id = 0;
+        _vis_acc.header.frame_id = "/map";
+        _vis_acc.type = visualization_msgs::Marker::ARROW;
+        _vis_acc.action = visualization_msgs::Marker::ADD;
+        _vis_acc.color.a = 1.0;
+        _vis_acc.color.r = 1.0;
+        _vis_acc.color.g = 1.0;
+        _vis_acc.color.b = 0.0;
 
-  traj_cmd_.push_back(pos);
-  if (traj_cmd_.size() > 10000) traj_cmd_.erase(traj_cmd_.begin(), traj_cmd_.begin() + 1000);
-}
+        _vis_acc.header.stamp = _odom.header.stamp;
 
-int main(int argc, char** argv) {
-  ros::init(argc, argv, "traj_server");
-  ros::NodeHandle node;
-  ros::NodeHandle nh("~");
+        _vis_acc.points.clear();
+        pt.x = _cmd.position.x;
+        pt.y = _cmd.position.y;
+        pt.z = _cmd.position.z;
 
-  ros::Subscriber bspline_sub = node.subscribe("planning/bspline", 10, bsplineCallback);
-  ros::Subscriber replan_sub = node.subscribe("planning/replan", 10, replanCallback);
-  ros::Subscriber new_sub = node.subscribe("planning/new", 10, newCallback);
-  ros::Subscriber odom_sub = node.subscribe("/odom_world", 50, odomCallbck);
+        _vis_acc.points.push_back(pt);
+        
+        pt.x = _cmd.position.x + _cmd.acceleration.x;
+        pt.y = _cmd.position.y + _cmd.acceleration.y;
+        pt.z = _cmd.position.z + _cmd.acceleration.z;
 
-  cmd_vis_pub = node.advertise<visualization_msgs::Marker>("planning/position_cmd_vis", 10);
-  pos_cmd_pub = node.advertise<quadrotor_msgs::PositionCommand>("/position_cmd", 50);
-  traj_pub = node.advertise<visualization_msgs::Marker>("planning/travel_traj", 10);
+        _vis_acc.points.push_back(pt);
 
-  ros::Timer cmd_timer = node.createTimer(ros::Duration(0.01), cmdCallback);
-  ros::Timer vis_timer = node.createTimer(ros::Duration(0.25), visCallback);
+        _vis_acc.scale.x = 0.2;
+        _vis_acc.scale.y = 0.4;
+        _vis_acc.scale.z = 0.4;
 
-  /* control parameter */
-  cmd.kx[0] = pos_gain[0];
-  cmd.kx[1] = pos_gain[1];
-  cmd.kx[2] = pos_gain[2];
+        _vis_acc_pub.publish(_vis_acc);
+    }
+};
 
-  cmd.kv[0] = vel_gain[0];
-  cmd.kv[1] = vel_gain[1];
-  cmd.kv[2] = vel_gain[2];
+int main(int argc, char ** argv)
+{
+    ros::init(argc, argv, "gradient_trajectory_server_node");
+    ros::NodeHandle handle("~");
 
-  nh.param("traj_server/time_forward", time_forward_, -1.0);
-  last_yaw_ = 0.0;
+    TrajectoryServer server(handle);
 
-  ros::Duration(1.0).sleep();
+    ros::spin();
 
-  ROS_WARN("[Traj server]: ready.");
-
-  ros::spin();
-
-  return 0;
+    return 0;
 }

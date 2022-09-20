@@ -50,6 +50,7 @@ void KinoReplanFSM::init(ros::NodeHandle& nh) {
   visualizer.reset(new Visualizer(nh));
   /* callback */
   exec_timer_   = nh.createTimer(ros::Duration(0.01), &KinoReplanFSM::execFSMCallback, this);
+  cmd_timer_ = nh.createTimer(ros::Duration(0.01), &KinoReplanFSM::pubCMDCallback, this);
   safety_timer_ = nh.createTimer(ros::Duration(0.05), &KinoReplanFSM::checkCollisionCallback, this);
 
   waypoint_sub_ =
@@ -118,6 +119,43 @@ void KinoReplanFSM::printFSMExecState() {
   cout << "[FSM]: state: " + state_str[int(exec_state_)] << endl;
 }
 
+void KinoReplanFSM::pubCMDCallback(const ros::TimerEvent& e) {
+
+  MidPlanData* info = &planner_manager_->plan_data_;
+  ros::Time      time_now = ros::Time::now();
+  double         t_cur    = (time_now - info->start_time_).toSec();
+  if(info->traj.getPieceNum() > 0) {
+      t_cur = min(info->traj.getTotalDuration(), t_cur);
+
+      double pos_gain[3] = { 7.0, 7.0, 7.5 };
+      double vel_gain[3] = { 5.4, 5.4, 5.0 };
+      Eigen::Vector3d pos = info->traj.getPos(t_cur);
+      Eigen::Vector3d vel = info->traj.getVel(t_cur);
+      Eigen::Vector3d acc = info->traj.getAcc(t_cur);
+      double desire_psi;
+      planner_manager_->planYaw(t_cur, desire_psi);
+
+      cmd_.position.x = pos[0];
+      cmd_.position.y = pos[1];
+      cmd_.position.z = pos[2];
+      cmd_.velocity.x = vel[0];
+      cmd_.velocity.y = vel[1];
+      cmd_.velocity.z = vel[2];
+      cmd_.acceleration.x = acc[0];
+      cmd_.acceleration.y = acc[1];
+      cmd_.acceleration.z = acc[2];
+      cmd_.kx[0] = pos_gain[0];
+      cmd_.kx[1] = pos_gain[1];
+      cmd_.kx[2] = pos_gain[2];
+      cmd_.kv[0] = vel_gain[0];
+      cmd_.kv[1] = vel_gain[1];
+      cmd_.kv[2] = vel_gain[2];
+      cmd_.yaw = desire_psi;
+        // publish control command
+      cmd_pub_.publish(cmd_);
+  }
+}
+
 void KinoReplanFSM::execFSMCallback(const ros::TimerEvent& e) {
   static int fsm_num = 0;
   fsm_num++;
@@ -181,32 +219,32 @@ void KinoReplanFSM::execFSMCallback(const ros::TimerEvent& e) {
       double         t_cur    = (time_now - info->start_time_).toSec();
       t_cur = min(info->traj.getTotalDuration(), t_cur);
 
-      double pos_gain[3] = { 6.0, 6.0, 7.5 };
-      double vel_gain[3] = { 3.4, 3.4, 5.0 };
-      Eigen::Vector3d pos = info->traj.getPos(t_cur);
-      Eigen::Vector3d vel = info->traj.getVel(t_cur);
-      Eigen::Vector3d acc = info->traj.getAcc(t_cur);
-      double desire_psi;
-      planner_manager_->planYaw(t_cur, desire_psi);
+      // double pos_gain[3] = { 6.0, 6.0, 7.5 };
+      // double vel_gain[3] = { 3.4, 3.4, 5.0 };
+      // Eigen::Vector3d pos = info->traj.getPos(t_cur);
+      // Eigen::Vector3d vel = info->traj.getVel(t_cur);
+      // Eigen::Vector3d acc = info->traj.getAcc(t_cur);
+      // double desire_psi;
+      // planner_manager_->planYaw(t_cur, desire_psi);
 
-      cmd_.position.x = pos[0];
-      cmd_.position.y = pos[1];
-      cmd_.position.z = pos[2];
-      cmd_.velocity.x = vel[0];
-      cmd_.velocity.y = vel[1];
-      cmd_.velocity.z = vel[2];
-      cmd_.acceleration.x = acc[0];
-      cmd_.acceleration.y = acc[1];
-      cmd_.acceleration.z = acc[2];
-      cmd_.kx[0] = pos_gain[0];
-      cmd_.kx[1] = pos_gain[1];
-      cmd_.kx[2] = pos_gain[2];
-      cmd_.kv[0] = vel_gain[0];
-      cmd_.kv[1] = vel_gain[1];
-      cmd_.kv[2] = vel_gain[2];
-      cmd_.yaw = desire_psi;
-        // publish control command
-      cmd_pub_.publish(cmd_);
+      // cmd_.position.x = pos[0];
+      // cmd_.position.y = pos[1];
+      // cmd_.position.z = pos[2];
+      // cmd_.velocity.x = vel[0];
+      // cmd_.velocity.y = vel[1];
+      // cmd_.velocity.z = vel[2];
+      // cmd_.acceleration.x = acc[0];
+      // cmd_.acceleration.y = acc[1];
+      // cmd_.acceleration.z = acc[2];
+      // cmd_.kx[0] = pos_gain[0];
+      // cmd_.kx[1] = pos_gain[1];
+      // cmd_.kx[2] = pos_gain[2];
+      // cmd_.kv[0] = vel_gain[0];
+      // cmd_.kv[1] = vel_gain[1];
+      // cmd_.kv[2] = vel_gain[2];
+      // cmd_.yaw = desire_psi;
+      //   // publish control command
+      // cmd_pub_.publish(cmd_);
 
       // /* && (end_pt_ - pos).norm() < 0.5 */
       if (t_cur > info->traj.getTotalDuration() - 1e-2) {
@@ -223,16 +261,15 @@ void KinoReplanFSM::execFSMCallback(const ros::TimerEvent& e) {
       ros::Time      time_now = ros::Time::now();
       double         t_cur    = (time_now - info->start_time_).toSec();
 
-      start_pt_  = odom_pos_;
-      start_vel_ = odom_vel_;
-      start_acc_ = info->traj.getAcc(t_cur);
-
-      // start_yaw_(0) = info->yaw_traj_.evaluateDeBoorT(t_cur)[0];
-      // start_yaw_(1) = info->yawdot_traj_.evaluateDeBoorT(t_cur)[0];
-      // start_yaw_(2) = info->yawdotdot_traj_.evaluateDeBoorT(t_cur)[0];
-
-      // std_msgs::Empty replan_msg;
-      // replan_pub_.publish(replan_msg);
+      if(t_cur > info->traj.getTotalDuration()) {
+        start_pt_  = odom_pos_;
+        start_vel_ = odom_vel_;
+        start_acc_ << 0, 0, 0;
+      } else {
+        start_pt_  = info->traj.getPos(t_cur);
+        start_vel_ = info->traj.getVel(t_cur);
+        start_acc_ = info->traj.getAcc(t_cur);
+      }
 
       bool success = callKinodynamicReplan();
       if (success) {
@@ -320,6 +357,8 @@ void KinoReplanFSM::checkCollisionCallback(const ros::TimerEvent& e) {
 
 bool KinoReplanFSM::callKinodynamicReplan() {
 
+  auto plan_data = &planner_manager_->plan_data_;
+
   std::chrono::high_resolution_clock::time_point tic = std::chrono::high_resolution_clock::now();
   bool plan_success = planner_manager_->kinodynamicReplan(start_pt_, start_vel_, start_acc_, end_pt_, end_vel_);
   double compTime = std::chrono::duration_cast<std::chrono::microseconds>
@@ -328,37 +367,71 @@ bool KinoReplanFSM::callKinodynamicReplan() {
 
   if (plan_success) {
     tic = std::chrono::high_resolution_clock::now();
+
     plan_success = planner_manager_->trajOpt();
+
     compTime = std::chrono::duration_cast<std::chrono::microseconds>
                     (std::chrono::high_resolution_clock::now() - tic).count() * 1.0e-3;
     std::cout << "Traj Opt Time Cost (ms)： " << compTime <<std::endl;
+
+    if (plan_success) {
+      /* visulization */
+      // auto plan_data = &planner_manager_->plan_data_;
+
+      visualizer->visualizePolytope(plan_data->hPolys);   
+      if (plan_data->traj.getPieceNum() > 0){
+        visualizer->visualize(plan_data->traj, plan_data->kino_path_);
+      }
+
+      plan_data->start_time_ = ros::Time::now();
+
+      ros::Duration(0.001).sleep();
+
+      return true;
+    } 
+    else {
+      cout << "generate new traj fail." << endl;
+      return false;
+    }
   }
   else {
     cout << "path search fail." << endl;
     return false;
   }
 
-  if (plan_success) {
-    /* visulization */
-    auto plan_data = &planner_manager_->plan_data_;
+}
 
-    visualizer->visualizePolytope(plan_data->hPolys);   
-    if (plan_data->traj.getPieceNum() > 0){
-        visualizer->visualize(plan_data->traj, plan_data->kino_path_);
-    }
-
-    plan_data->start_time_ = ros::Time::now();
-
-    ros::Duration(0.001).sleep();
-
-    return true;
-
-  } 
-  else {
-    cout << "generate new traj fail." << endl;
-    return false;
-  }
+void KinoReplanFSM::pubTrajcectory() {
+  MidPlanData* info = &planner_manager_->plan_data_;
   
+  unsigned int poly_number;
+  static int count = 1; 
+  quadrotor_msgs::PolynomialTrajectory traj_msg;
+  traj_msg.header.seq = count;
+  traj_msg.header.stamp = ros::Time::now();
+  traj_msg.header.frame_id = std::string("/world");
+  traj_msg.trajectory_id = count;
+  traj_msg.action = quadrotor_msgs::PolynomialTrajectory::ACTION_ADD;
+  traj_msg.num_order = 5;
+  traj_msg.num_segment = info->traj.getPieceNum();
+  traj_msg.start_yaw = 0;
+  traj_msg.final_yaw = 0;
+
+  poly_number = traj_msg.num_order + 1;
+
+  // for(unsigned int i = 0; i < traj_msg.num_segment; i++)
+  //   {
+  //       for(unsigned int j = 0; j < poly_number; j++)
+  //       {
+  //         traj_msg.coef_x.push_back(polyCoeff(i,j) * pow(time(i),j));
+  //         traj_msg.coef_y.push_back(polyCoeff(i, poly_number + j) * pow(time(i),j));
+  //         traj_msg.coef_z.push_back(polyCoeff(i, 2*poly_number + j) * pow(time(i),j));
+  //       }
+  //       traj_msg.time.push_back(time(i));
+  //       traj_msg.order.push_back(traj_msg.num_order);
+  //   }
+  //   traj_msg.mag_coeff = 1;
+
 }
 
 // KinoReplanFSM::
