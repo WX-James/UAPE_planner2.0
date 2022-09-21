@@ -107,7 +107,6 @@ private:
   bool callKinodynamicReplan();        // front-end and back-end method
   bool callTopologicalTraj(int step);  // topo path guided gradient-based
                                        // optimization; 1: new, 2: replan
-  void pubTrajcectory();
   void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
   void printFSMExecState();
 

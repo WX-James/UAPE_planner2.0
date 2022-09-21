@@ -401,38 +401,5 @@ bool KinoReplanFSM::callKinodynamicReplan() {
 
 }
 
-void KinoReplanFSM::pubTrajcectory() {
-  MidPlanData* info = &planner_manager_->plan_data_;
-  
-  unsigned int poly_number;
-  static int count = 1; 
-  quadrotor_msgs::PolynomialTrajectory traj_msg;
-  traj_msg.header.seq = count;
-  traj_msg.header.stamp = ros::Time::now();
-  traj_msg.header.frame_id = std::string("/world");
-  traj_msg.trajectory_id = count;
-  traj_msg.action = quadrotor_msgs::PolynomialTrajectory::ACTION_ADD;
-  traj_msg.num_order = 5;
-  traj_msg.num_segment = info->traj.getPieceNum();
-  traj_msg.start_yaw = 0;
-  traj_msg.final_yaw = 0;
-
-  poly_number = traj_msg.num_order + 1;
-
-  // for(unsigned int i = 0; i < traj_msg.num_segment; i++)
-  //   {
-  //       for(unsigned int j = 0; j < poly_number; j++)
-  //       {
-  //         traj_msg.coef_x.push_back(polyCoeff(i,j) * pow(time(i),j));
-  //         traj_msg.coef_y.push_back(polyCoeff(i, poly_number + j) * pow(time(i),j));
-  //         traj_msg.coef_z.push_back(polyCoeff(i, 2*poly_number + j) * pow(time(i),j));
-  //       }
-  //       traj_msg.time.push_back(time(i));
-  //       traj_msg.order.push_back(traj_msg.num_order);
-  //   }
-  //   traj_msg.mag_coeff = 1;
-
-}
-
 // KinoReplanFSM::
 }  // namespace fast_planner
