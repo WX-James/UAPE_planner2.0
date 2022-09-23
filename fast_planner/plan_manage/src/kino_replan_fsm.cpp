@@ -219,33 +219,6 @@ void KinoReplanFSM::execFSMCallback(const ros::TimerEvent& e) {
       double         t_cur    = (time_now - info->start_time_).toSec();
       t_cur = min(info->traj.getTotalDuration(), t_cur);
 
-      // double pos_gain[3] = { 6.0, 6.0, 7.5 };
-      // double vel_gain[3] = { 3.4, 3.4, 5.0 };
-      // Eigen::Vector3d pos = info->traj.getPos(t_cur);
-      // Eigen::Vector3d vel = info->traj.getVel(t_cur);
-      // Eigen::Vector3d acc = info->traj.getAcc(t_cur);
-      // double desire_psi;
-      // planner_manager_->planYaw(t_cur, desire_psi);
-
-      // cmd_.position.x = pos[0];
-      // cmd_.position.y = pos[1];
-      // cmd_.position.z = pos[2];
-      // cmd_.velocity.x = vel[0];
-      // cmd_.velocity.y = vel[1];
-      // cmd_.velocity.z = vel[2];
-      // cmd_.acceleration.x = acc[0];
-      // cmd_.acceleration.y = acc[1];
-      // cmd_.acceleration.z = acc[2];
-      // cmd_.kx[0] = pos_gain[0];
-      // cmd_.kx[1] = pos_gain[1];
-      // cmd_.kx[2] = pos_gain[2];
-      // cmd_.kv[0] = vel_gain[0];
-      // cmd_.kv[1] = vel_gain[1];
-      // cmd_.kv[2] = vel_gain[2];
-      // cmd_.yaw = desire_psi;
-      //   // publish control command
-      // cmd_pub_.publish(cmd_);
-
       // /* && (end_pt_ - pos).norm() < 0.5 */
       if (t_cur > info->traj.getTotalDuration() - 1e-2) {
         have_target_ = false;
