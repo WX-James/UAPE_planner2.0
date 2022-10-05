@@ -408,7 +408,7 @@ double KinodynamicAstar::estimateOcclusion(Eigen::VectorXd x1, Eigen::VectorXd x
   {
     if (edt_environment_->sdf_map_->getInflateOccupancy(start + i*dx) == 1 )
     {
-      cost = 30;
+      cost = 20;
       break;
     }
   }

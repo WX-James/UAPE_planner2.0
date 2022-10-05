@@ -369,6 +369,12 @@ bool KinoReplanFSM::callKinodynamicReplan() {
   if (plan_success) {
     tic = std::chrono::high_resolution_clock::now();
 
+    plan_success = planner_manager_->sfcGen();
+
+    compTime = std::chrono::duration_cast<std::chrono::microseconds>
+                    (std::chrono::high_resolution_clock::now() - tic).count() * 1.0e-3;
+    std::cout << "SFC Generation Cost (ms)： " << compTime <<std::endl;
+
     plan_success = planner_manager_->trajOpt();
 
     compTime = std::chrono::duration_cast<std::chrono::microseconds>

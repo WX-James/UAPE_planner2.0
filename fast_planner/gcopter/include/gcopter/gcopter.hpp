@@ -448,7 +448,7 @@ namespace gcopter
                     for (int k = 0; k < K; k++)
                     {
                         outerNormal = hPolys[L].block<1, 3>(k, 0);
-                        violaPos = outerNormal.dot(pos) + hPolys[L](k, 3) + 0.12;
+                        violaPos = outerNormal.dot(pos) + hPolys[L](k, 3) + 0.14;
                         if (smoothedL1(violaPos, smoothFactor, violaPosPena, violaPosPenaD))
                         {
                             gradPos += weightPos * violaPosPenaD * outerNormal;

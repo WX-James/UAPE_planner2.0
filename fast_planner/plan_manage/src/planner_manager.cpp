@@ -158,7 +158,13 @@ bool FastPlannerManager::kinodynamicReplan(Eigen::Vector3d start_pt, Eigen::Vect
   plan_data_.kino_path_ = kino_path_finder_->getKinoTraj(0.2);
   t_search = (ros::Time::now() - t1).toSec();
 
-  std::chrono::high_resolution_clock::time_point tic = std::chrono::high_resolution_clock::now();
+  return true;
+}
+
+// !SECTION
+
+bool FastPlannerManager::sfcGen()
+{
   std::vector<Eigen::Vector3d> pc;
   sdf_map_->getSurf(pc);
 
@@ -169,10 +175,6 @@ bool FastPlannerManager::kinodynamicReplan(Eigen::Vector3d start_pt, Eigen::Vect
                        2.0,
                        3.0,
                        plan_data_.hPolys);
-  double compTime = std::chrono::duration_cast<std::chrono::microseconds>
-                    (std::chrono::high_resolution_clock::now() - tic).count() * 1.0e-3;
-  std::cout << "SFC Time Cost (ms)： " << compTime <<std::endl;
-  // sfc_gen::shortCut(plan_data_.hPolys);
 
   return true;
 }
