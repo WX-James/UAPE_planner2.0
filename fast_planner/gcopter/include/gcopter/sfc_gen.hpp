@@ -67,7 +67,7 @@ namespace sfc_gen
         {
             // std::chrono::high_resolution_clock::time_point tic = std::chrono::high_resolution_clock::now();
             a = path[i];
-            b = path[i+7];
+            b = path[i+6];
             if(i + 7 > n -1)
                 b = path[n-1];
 
@@ -96,7 +96,7 @@ namespace sfc_gen
                 }
             }
             Eigen::Map<const Eigen::Matrix<double, 3, -1, Eigen::ColMajor>> pc(valid_pc[0].data(), 3, valid_pc.size());
-            // std::chrono::high_resolution_clock::time_point tic = std::chrono::high_resolution_clock::now();
+            
             firi::firi(bd, pc, a, b, hp);
 
             hpolys.emplace_back(hp);
@@ -124,9 +124,6 @@ namespace sfc_gen
                     break;
                 }
             }
-            // double compTime = std::chrono::duration_cast<std::chrono::microseconds>
-            //         (std::chrono::high_resolution_clock::now() - tic).count() * 1.0e-3;
-            // std::cout << "sfc1 Time Cost (ms)： " << compTime <<std::endl;
         }
     }
 

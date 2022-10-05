@@ -409,7 +409,7 @@ namespace firi
                 break;
             }
 
-            // maxVolInsEllipsoid(hPoly, R, p, r);
+            maxVolInsEllipsoid(hPoly, R, p, r);
         }
 
         return true;

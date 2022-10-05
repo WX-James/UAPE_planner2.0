@@ -632,7 +632,7 @@ namespace gcopter
             shortest_path_params.past = 3;
             shortest_path_params.delta = 1.0e-3;
             shortest_path_params.g_epsilon = 1.0e-5;
-
+            
             lbfgs::lbfgs_optimize(xi,
                                   minDistance,
                                   &GCOPTER_PolytopeSFC::costDistance,
@@ -836,10 +836,11 @@ namespace gcopter
             double minCostFunctional;
             lbfgs_params.mem_size = 256;
             lbfgs_params.past = 3;
-            lbfgs_params.min_step = 1.0e-32;
+            lbfgs_params.min_step = 1.0e-20;
+            lbfgs_params.max_iterations = 200; 
             lbfgs_params.g_epsilon = 0.0;
             lbfgs_params.delta = relCostTol;
-
+            
             int ret = lbfgs::lbfgs_optimize(x,
                                             minCostFunctional,
                                             &GCOPTER_PolytopeSFC::costFunctional,
