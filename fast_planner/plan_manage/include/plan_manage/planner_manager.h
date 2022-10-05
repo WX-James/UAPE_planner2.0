@@ -34,6 +34,7 @@
 #include <gcopter/sfc_gen.hpp>
 #include <gcopter/gcopter.hpp>
 #include <gcopter/trajectory.hpp>
+#include <chrono>
 #include <ros/ros.h>
 
 namespace fast_planner {

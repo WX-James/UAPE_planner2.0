@@ -269,7 +269,7 @@ namespace firi
                      const Eigen::Vector3d &a,
                      const Eigen::Vector3d &b,
                      Eigen::MatrixX4d &hPoly,
-                     const int iterations = 4,
+                     const int iterations = 1,
                      const double epsilon = 1.0e-6)
     {
         const Eigen::Vector4d ah(a(0), a(1), a(2), 1.0);
@@ -304,7 +304,7 @@ namespace firi
             Eigen::MatrixX4d tangents(N, 4);
             Eigen::VectorXd distRs(N);
 
-            for (int i = 0; i < N; i++)
+            for (int i = 0; i < N; ++i)
             {
                 distRs(i) = forwardPC.col(i).norm();
                 tangents(i, 3) = -distRs(i);
@@ -409,7 +409,7 @@ namespace firi
                 break;
             }
 
-            maxVolInsEllipsoid(hPoly, R, p, r);
+            // maxVolInsEllipsoid(hPoly, R, p, r);
         }
 
         return true;

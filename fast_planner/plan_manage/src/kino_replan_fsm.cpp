@@ -55,6 +55,8 @@ void KinoReplanFSM::init(ros::NodeHandle& nh) {
 
   waypoint_sub_ =
       nh.subscribe("/waypoint_generator/waypoints", 1, &KinoReplanFSM::waypointCallback, this);
+  target_sub_ = 
+      nh.subscribe("/target_box", 1, &KinoReplanFSM::targetCallback, this);
   odom_sub_ = nh.subscribe("/odom_world", 1, &KinoReplanFSM::odometryCallback, this);
 
   replan_pub_  = nh.advertise<std_msgs::Empty>("/planning/replan", 10);
@@ -82,6 +84,32 @@ void KinoReplanFSM::waypointCallback(const nav_msgs::PathConstPtr& msg) {
   // visualization_->drawGoal(end_pt_, 0.3, Eigen::Vector4d(1, 0, 0, 1.0));
   end_vel_.setZero();
   have_target_ = true;
+
+  if (exec_state_ == WAIT_TARGET)
+    changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
+  else if (exec_state_ == EXEC_TRAJ)
+    changeFSMExecState(REPLAN_TRAJ, "TRIG");
+}
+
+void KinoReplanFSM::targetCallback(const obj_state_msgs::ObjectsStatesConstPtr& msg) {
+  cout << "Triggered!" << endl;
+  trigger_ = true;
+  Eigen::Vector3d tar_v_;
+  int area;
+  for(auto state: msg->states) {
+    end_pt_(0) = state.position.x;
+    end_pt_(1) = state.position.y;
+    end_pt_(2) = state.position.z;
+    tar_v_ << state.velocity.x, state.velocity.y, state.velocity.z;
+    area = state.area;
+  }
+  end_vel_.setZero();
+  have_target_ = true;
+
+  if(tar_v_.head(2).norm() < 0.3 && area > 20000 && area < 23000) {
+    changeFSMExecState(WAIT_TARGET, "FSM");
+    return;
+  }
 
   if (exec_state_ == WAIT_TARGET)
     changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
