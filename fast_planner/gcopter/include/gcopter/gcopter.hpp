@@ -335,29 +335,6 @@ namespace gcopter
                 return true;
             }
         }
-
-        static inline bool distanceKeep(const double &x,    
-                                        double &f,
-                                        double &df)
-        {
-            if (x < 3.6)
-            {
-                f = (x - 3.6) * (x - 3.6);
-                df = 2 * (x - 3.6);
-                return true;
-            }
-            else if(x > 3.6 && x < 4.4)
-            {
-                return false;
-            }
-            else if(x > 4.4)
-            {
-                f = (x - 4.4) * (x - 4.4) * (x - 4.4);
-                df = 3 * (x - 4.4) * (x - 4.4);
-                return true;
-            }
-
-        }
       
         // magnitudeBounds = [v_max, omg_max, theta_max, thrust_min, thrust_max]^T
         // penaltyWeights = [pos_weight, vel_weight, omg_weight, theta_weight, thrust_weight]^T
