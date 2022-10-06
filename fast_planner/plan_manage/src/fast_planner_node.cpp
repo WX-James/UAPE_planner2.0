@@ -43,12 +43,8 @@ int main(int argc, char** argv) {
   nh.param("planner_node/planner", planner, -1);
   
   KinoReplanFSM kino_replan;
-
-  if (planner == 1) {
-    kino_replan.init(nh);
-  } else if (planner == 2) {
-    return 0;
-  }
+  
+  kino_replan.init(nh);
 
   ros::Duration(1.0).sleep();
   ros::spin();
