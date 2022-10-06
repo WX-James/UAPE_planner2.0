@@ -172,8 +172,8 @@ bool FastPlannerManager::sfcGen()
                        pc,
                        sdf_map_->getOrigin(),
                        sdf_map_->getCorner(),
+                       5.0,
                        2.0,
-                       3.0,
                        plan_data_.hPolys);
 
   return true;

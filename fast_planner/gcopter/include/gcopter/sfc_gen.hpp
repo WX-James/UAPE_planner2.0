@@ -68,7 +68,7 @@ namespace sfc_gen
             // std::chrono::high_resolution_clock::time_point tic = std::chrono::high_resolution_clock::now();
             a = path[i];
             b = path[i+6];
-            if(i + 7 > n -1)
+            if(i + 6 > n -1)
                 b = path[n-1];
 
             if ((b-a).norm() > progress)

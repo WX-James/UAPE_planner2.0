@@ -448,7 +448,7 @@ namespace gcopter
                     for (int k = 0; k < K; k++)
                     {
                         outerNormal = hPolys[L].block<1, 3>(k, 0);
-                        violaPos = outerNormal.dot(pos) + hPolys[L](k, 3) + 0.14;
+                        violaPos = outerNormal.dot(pos) + hPolys[L](k, 3) + 0.1;
                         if (smoothedL1(violaPos, smoothFactor, violaPosPena, violaPosPenaD))
                         {
                             gradPos += weightPos * violaPosPenaD * outerNormal;
@@ -834,11 +834,11 @@ namespace gcopter
             backwardT(times, tau);
             backwardP(points, vPolyIdx, vPolytopes, xi);
             double minCostFunctional;
-            lbfgs_params.mem_size = 256;
+            lbfgs_params.mem_size = 8;
             lbfgs_params.past = 3;
             lbfgs_params.min_step = 1.0e-20;
-            lbfgs_params.max_iterations = 200; 
-            lbfgs_params.g_epsilon = 0.0;
+            // lbfgs_params.max_iterations = 200; 
+            lbfgs_params.g_epsilon = 1e-5;
             lbfgs_params.delta = relCostTol;
             
             int ret = lbfgs::lbfgs_optimize(x,
