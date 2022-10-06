@@ -220,7 +220,7 @@ bool FastPlannerManager::trajOpt()
   {
     return false;
   }
-  if (std::isinf(gcopter.optimize(plan_data_.traj, 1.0e-5)))
+  if (gcopter.optimize(plan_data_.traj, 1.0e-5) > -200)
   {
     return true;
   }

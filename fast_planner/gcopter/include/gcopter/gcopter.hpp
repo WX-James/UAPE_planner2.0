@@ -836,7 +836,8 @@ namespace gcopter
             else
             {
                 traj.clear();
-                minCostFunctional = INFINITY;
+                // minCostFunctional = INFINITY;
+                minCostFunctional = -5000;
                 std::cout << "Optimization Failed: "
                           << lbfgs::lbfgs_strerror(ret)
                           << std::endl;
