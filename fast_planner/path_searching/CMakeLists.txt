@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(path_searching)
 set(CMAKE_CXX_STANDARD 14)
-
+set(CMAKE_BUILD_TYPE "Release")
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 
