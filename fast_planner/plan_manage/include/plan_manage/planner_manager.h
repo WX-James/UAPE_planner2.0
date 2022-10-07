@@ -70,17 +70,11 @@ public:
 private:
   /* main planning algorithms & modules */
   SDFMap::Ptr sdf_map_;
-  gcopter::GCOPTER_PolytopeSFC gcopter;
+  gcopter::GCOPTER_PolytopeSFC::Ptr gcopter;
 
   unique_ptr<Astar> geo_path_finder_;
   unique_ptr<KinodynamicAstar> kino_path_finder_;
   
-
-  // heading planning
-
-  // !SECTION stable
-
-  // SECTION developing
 
 public:
   typedef unique_ptr<FastPlannerManager> Ptr;

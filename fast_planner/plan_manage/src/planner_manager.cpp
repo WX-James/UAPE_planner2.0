@@ -72,6 +72,9 @@ void FastPlannerManager::initPlanModules(ros::NodeHandle& nh) {
     kino_path_finder_->init();
   }
 
+  gcopter.reset(new gcopter::GCOPTER_PolytopeSFC);
+  gcopter->setParam(nh);
+
 }
 
 
@@ -188,39 +191,19 @@ bool FastPlannerManager::trajOpt()
   Eigen::Matrix3d finState;  
   iniState << plan_data_.kino_path_.front(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero();
   finState << plan_data_.kino_path_.back(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero();
-  Eigen::VectorXd magnitudeBounds(5);
-  Eigen::VectorXd penaltyWeights(5);
-  Eigen::VectorXd physicalParams(6);
-  magnitudeBounds(0) = 2.5;
-  magnitudeBounds(1) = 2.1;
-  magnitudeBounds(2) = 1.05;
-  magnitudeBounds(3) = 2.0;
-  magnitudeBounds(4) = 12.0;
-  penaltyWeights(0) = 1.0e+4;
-  penaltyWeights(1) = 1.0e+4;
-  penaltyWeights(2) = 1.0e+4;
-  penaltyWeights(3) = 1.0e+4;
-  penaltyWeights(4) = 1.0e+5;
-  physicalParams(0) = 0.61;
-  physicalParams(1) = 9.8;
-  physicalParams(2) = 0.7;
-  physicalParams(3) = 0.8;
-  physicalParams(4) = 0.01;
-  physicalParams(5) = 0.0001;
+
   const int quadratureRes = 15;
   plan_data_.traj.clear();
-  if (!gcopter.setup(20,
+  
+  if (!gcopter->setup(20,
                      iniState, finState,
                      plan_data_.hPolys, INFINITY,
                      1.0e-2,
-                     quadratureRes,
-                     magnitudeBounds,
-                     penaltyWeights,
-                     physicalParams))
+                     quadratureRes))
   {
     return false;
   }
-  if (gcopter.optimize(plan_data_.traj, 1.0e-5) > -200)
+  if (gcopter->optimize(plan_data_.traj, 1.0e-5) > -200)
   {
     return true;
   }

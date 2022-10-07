@@ -124,39 +124,13 @@
     <param name="search/margin" value="0.2" type="double"/>
     <param name="search/allocate_num" value="100000" type="int"/>
     <param name="search/check_num" value="8" type="int"/>
-
-  <!-- trajectory optimization -->
-    <param name="optimization/lambda1" value="10.0" type="double"/>
-    <param name="optimization/lambda2" value="5.0" type="double"/>
-    <param name="optimization/lambda3" value="0.00001" type="double"/>
-    <param name="optimization/lambda4" value="0.01" type="double"/>
-    <param name="optimization/lambda7" value="100.0" type="double"/>
-    <param name="optimization/dist0" value="0.4" type="double"/>
-    <param name="optimization/max_vel" value="$(arg max_vel)" type="double"/>
-    <param name="optimization/max_acc" value="$(arg max_acc)" type="double"/>
-
-    <param name="optimization/algorithm1" value="15" type="int"/>
-    <param name="optimization/algorithm2" value="11" type="int"/>
-
-    <param name="optimization/max_iteration_num1" value="2" type="int"/>
-    <param name="optimization/max_iteration_num2" value="300" type="int"/>
-    <param name="optimization/max_iteration_num3" value="200" type="int"/>
-    <param name="optimization/max_iteration_num4" value="200" type="int"/>
-
-    <param name="optimization/max_iteration_time1" value="0.0001" type="double"/>
-    <param name="optimization/max_iteration_time2" value="0.005" type="double"/>
-    <param name="optimization/max_iteration_time3" value="0.003" type="double"/>
-    <param name="optimization/max_iteration_time4" value="0.003" type="double"/>
-
-    <param name="optimization/order" value="3" type="int"/>
-
-    <param name="bspline/limit_vel" value="$(arg max_vel)" type="double"/>
-    <param name="bspline/limit_acc" value="$(arg max_acc)" type="double"/>
-    <param name="bspline/limit_ratio" value="1.1" type="double"/>
-
-    <param name="bspline/limit_vel" value="$(arg max_vel)" type="double"/>
-    <param name="bspline/limit_acc" value="$(arg max_acc)" type="double"/>
-    <param name="bspline/limit_ratio" value="1.1" type="double"/>
+    
+  <!-- Minco traj optimizition -->
+    <param name="gcopter/max_vel" value="2.5" type="double"/>
+    <param name="gcopter/max_acc" value="5.0" type="double"/>
+    <param name="gcopter/weightPos" value="10000" type="double"/>
+    <param name="gcopter/weightVel" value="10000" type="double"/>
+    <param name="gcopter/weightAcc" value="10000" type="double"/>
 
   </node>
 
