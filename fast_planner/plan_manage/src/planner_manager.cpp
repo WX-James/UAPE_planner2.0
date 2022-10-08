@@ -108,9 +108,9 @@ bool FastPlannerManager::checkTrajCollision(double& distance) {
 
 // SECTION kinodynamic replanning
 
-bool FastPlannerManager::kinodynamicReplan(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel,
-                                           Eigen::Vector3d start_acc, Eigen::Vector3d end_pt,
-                                           Eigen::Vector3d end_vel) {
+bool FastPlannerManager::kinodynamicReplan(Eigen::Vector3d& start_pt, Eigen::Vector3d& start_vel,
+                                           Eigen::Vector3d& start_acc, Eigen::Vector3d& end_pt,
+                                           Eigen::Vector3d& end_vel) {
 
   std::cout << "[kino replan]: -----------------------" << std::endl;
   cout << "start: " << start_pt.transpose() << ", " << start_vel.transpose() << ", "
@@ -184,17 +184,19 @@ bool FastPlannerManager::sfcGen()
 
 // !SECTION
 
-bool FastPlannerManager::trajOpt()
+bool FastPlannerManager::trajOpt(Eigen::Vector3d& start_pt, 
+                                 Eigen::Vector3d& start_vel, 
+                                 Eigen::Vector3d& start_acc)
 {
   // Trajectory<5> traj;
   Eigen::Matrix3d iniState;
   Eigen::Matrix3d finState;  
-  iniState << plan_data_.kino_path_.front(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero();
+  iniState << start_pt, start_vel, start_acc;
   finState << plan_data_.kino_path_.back(), Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero();
 
   const int quadratureRes = 15;
   plan_data_.traj.clear();
-  
+
   if (!gcopter->setup(20,
                      iniState, finState,
                      plan_data_.hPolys, INFINITY,

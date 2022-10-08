@@ -126,7 +126,7 @@
     <param name="search/check_num" value="8" type="int"/>
     
   <!-- Minco traj optimizition -->
-    <param name="gcopter/max_vel" value="2.5" type="double"/>
+    <param name="gcopter/max_vel" value="4.0" type="double"/>
     <param name="gcopter/max_acc" value="5.0" type="double"/>
     <param name="gcopter/weightPos" value="10000" type="double"/>
     <param name="gcopter/weightVel" value="10000" type="double"/>

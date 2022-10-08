@@ -49,12 +49,12 @@ public:
   ~FastPlannerManager();
 
   /* main planning interface */
-  bool kinodynamicReplan(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel, Eigen::Vector3d start_acc,
-                         Eigen::Vector3d end_pt, Eigen::Vector3d end_vel);
+  bool kinodynamicReplan(Eigen::Vector3d& start_pt, Eigen::Vector3d& start_vel, Eigen::Vector3d& start_acc,
+                         Eigen::Vector3d& end_pt, Eigen::Vector3d& end_vel);
   
   bool sfcGen();
 
-  bool trajOpt();
+  bool trajOpt(Eigen::Vector3d& start_pt, Eigen::Vector3d& start_vel, Eigen::Vector3d& start_acc);
 
   void planYaw(const double& t_cur, double& desire_psi_);
 
